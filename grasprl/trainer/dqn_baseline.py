@@ -120,7 +120,9 @@ class DQN_Trainer(object):
                 return q_max
         else:
             self.last_action = "instruction"
-            
+            for obj_name in self.env.target_objects:
+                wx,wy,wz = self.env.get_body_com(obj_name)
+                
             action = np.random.randint(low=0,high=(self.env.IMAGE_WIDTH-1)*(self.env.IMAGE_HEIGHT-1))
  
             return torch.tensor([[action]], dtype=torch.long)

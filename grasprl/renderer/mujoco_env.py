@@ -96,23 +96,6 @@ class MujocoPhyEnv(gym.Env):
     def get_body_com(self, body_name):
         return self.data.body(body_name).xpos
     
-    def create_camera_data(self, width, height, camera):
-        """
-        Initializes all camera parameters that only need to be calculated once.
-        """
-        cam_id = self.model_names.camera_name2id[camera]
-        # Get field of view
-        fovy = self.model.cam_fovy[cam_id]
-        # Calculate focal length
-        f = 0.5 * height / np.tan(fovy * np.pi / 360)
-        # Construct camera matrix
-        self.cam_matrix = np.array(((f, 0, width / 2), (0, f, height / 2), (0, 0, 1)))
-        # Rotation of camera in world coordinates
-        self.cam_rot_mat = self.model.cam_mat0[cam_id]
-        self.cam_rot_mat = np.reshape(self.cam_rot_mat, (3, 3))
-        # Position of camera in world coordinates
-        self.cam_pos = self.model.cam_pos0[cam_id]
-        self.cam_init = True
 
     def get_image_data(
         self,
@@ -133,20 +116,6 @@ class MujocoPhyEnv(gym.Env):
         if depth:
             return np.array(rgb_data), np.array(depth_data)
 
-
-
-    def depth_2_meters(self, depth):
-        """
-        Converts the depth array delivered by MuJoCo (values between 0 and 1) into actual m values.
-
-        Args:
-            depth: The depth array to be converted.
-        """
-        extend = self.model.stat.extent
-        near = self.model.vis.map.znear * extend
-        far = self.model.vis.map.zfar * extend
-        return near / (1 - depth * (1 - near / far))
-    
     def get_pos_w(self,x,y):
 
         depth = self.observation["depth"][y][x]
