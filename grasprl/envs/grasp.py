@@ -12,7 +12,7 @@ _left_finger_name = "left_finger"
 _close_finger_dis = 0.06
 _open_finger_dis = 0.152
 _grasp_target_num = 6
-_target_box = ["box_1","box_2","box_3","ball_1","ball_2","ball_3"]
+_target_box = ["ball_3","ball_2","ball_1","box_2","box_1","box_3"]
 eyehand_target = [-0.02,-0.13,1.45,0,0,1,1]
 class GraspRobot(MujocoPhyEnv):
 
@@ -55,7 +55,7 @@ class GraspRobot(MujocoPhyEnv):
             physics=self.physics,
             gripper=self.gripper
         )
-
+        self.target_objects = _target_box
 
     def before_grasp(self,show=False):
         self.reward = 0

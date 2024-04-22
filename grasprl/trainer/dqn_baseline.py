@@ -79,12 +79,8 @@ class DQN_Trainer(object):
     def limit_action(self,action):
         action = np.clip(action,[-0.25,-0.25,self.env.TABLE_HEIGHT+0.05],[0.25,0.25,2])
         return list(action)
+    
     def select_action_by_eps(self,state):
-        """
-            return action according to the epsilon-greedy policy
-        """
-
-        
         self.eps_threshold = self.eps_end + (self.eps_start - self.eps_end) * math.exp(
             -1.0 * self.steps_done / self.eps_decay
         )
@@ -109,7 +105,25 @@ class DQN_Trainer(object):
                 if(threshold==10):
                     break
             return torch.tensor([[action]], dtype=torch.long)
-        
+    
+    def select_action_by_instruction(self,state):
+        self.eps_threshold = self.eps_end + (self.eps_start - self.eps_end) * math.exp(
+            -1.0 * self.steps_done / self.eps_decay
+        )
+        self.steps_done+=1
+        self.writer.add_scalar("Epslion",self.eps_threshold,self.steps_done)
+        if random.random() > self.eps_threshold:
+            self.last_action = "greedy"
+            with torch.no_grad():
+                q_max =  self.q_net(state).argmax()
+                q_max = torch.tensor([[q_max]], dtype=torch.long)
+                return q_max
+        else:
+            self.last_action = "instruction"
+            
+            action = np.random.randint(low=0,high=(self.env.IMAGE_WIDTH-1)*(self.env.IMAGE_HEIGHT-1))
+ 
+            return torch.tensor([[action]], dtype=torch.long)
     def learn(self):
         if len(self.memory) < 2 * BATCH_SIZE:
             print("Filling the replay buffer ...")
