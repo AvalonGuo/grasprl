@@ -1,0 +1,7 @@
+dm-control
+gymnasium
+mujoco
+opencv-python
+torch
+torchaudio
+torchvision
