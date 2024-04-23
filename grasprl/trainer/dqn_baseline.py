@@ -74,12 +74,29 @@ class DQN_Trainer(object):
         pixel_y = max_idx // self.env.IMAGE_HEIGHT
         depth =   self.depth_before[pixel_x][pixel_y]
         action = self.env.pixel2world(1,pixel_x,pixel_y,depth)
+        # print("pixelx:{},pixely:{},action:{}".format(pixel_x,pixel_y,action))
         return action
     
     def limit_action(self,action):
         action = np.clip(action,[-0.25,-0.25,self.env.TABLE_HEIGHT+0.05],[0.25,0.25,2])
         return list(action)
     
+    def select_action_by_eps_random(self,state):
+        self.eps_threshold = self.eps_end + (self.eps_start - self.eps_end) * math.exp(
+            -1.0 * self.steps_done / self.eps_decay
+        )     
+        self.steps_done+=1
+        self.writer.add_scalar("Epslion",self.eps_threshold,self.steps_done)
+        if random.random() > self.eps_threshold:
+            self.last_action = "greedy"
+            with torch.no_grad():
+                q_max =  self.q_net(state).argmax()
+                q_max = torch.tensor([[q_max]], dtype=torch.long)
+                return q_max
+        else:
+            self.last_action = "random"
+            action = np.random.randint(low=0,high=(self.env.IMAGE_WIDTH-1)*(self.env.IMAGE_HEIGHT-1))
+            return torch.tensor([[action]], dtype=torch.long)
     def select_action_by_eps(self,state):
         self.eps_threshold = self.eps_end + (self.eps_start - self.eps_end) * math.exp(
             -1.0 * self.steps_done / self.eps_decay
@@ -120,11 +137,16 @@ class DQN_Trainer(object):
                 return q_max
         else:
             self.last_action = "instruction"
-            for obj_name in self.env.target_objects:
+            action = None
+            for obj_name in self.env.target_objects:    
                 wx,wy,wz = self.env.get_body_com(obj_name)
-                
-            action = np.random.randint(low=0,high=(self.env.IMAGE_WIDTH-1)*(self.env.IMAGE_HEIGHT-1))
- 
+                # print("obj_name:{},pos:{}".format(obj_name,[wx,wy,wz]))
+                if -0.224<=wx<=0.224 and -0.224<=wy<=0.224 and wz>=0.9:
+                    px,py = self.env.world2pixel(cam_id=1,x=wx,y=wy,z=wz)
+                    action = py*self.env.IMAGE_WIDTH + px
+                    # print("action:{},px/py:{}/{},pos:[{},{},{}]".format(action,px,py,wx,wy,wz))
+                    break 
+
             return torch.tensor([[action]], dtype=torch.long)
     def learn(self):
         if len(self.memory) < 2 * BATCH_SIZE:
@@ -141,7 +163,7 @@ class DQN_Trainer(object):
             reward_batch = torch.cat(batch.reward[start_idx:end_idx]).to(self.device)
             # next_state_batch = torch.cat(batch.next_state[start_idx:end_idx]).to(self.device)
             # Compute the target Q value
-            q_pred = self.q_net(state_batch)[0][0].view(MAX_POSSIBLE_SAMPLES, -1).gather(1, action_batch)
+            q_pred = self.q_net(state_batch).view(MAX_POSSIBLE_SAMPLES, -1).gather(1, action_batch)
             q_expected = reward_batch.float()
 
             loss = F.binary_cross_entropy(q_pred, q_expected) / NUMBER_ACCUMULATIONS_BEFORE_UPDATE
@@ -178,27 +200,30 @@ def main():
     grasp_success = 0
     loop = tqdm(range(1,max_iter+1))
 
-    trainer = DQN_Trainer(log_dir="resnet_dqn_pex",render_mode="rgb")
+    trainer = DQN_Trainer(log_dir="resnet_dqn_random",render_mode="rgb")
 
     state = trainer.env.reset_without_random()
     state = trainer.transform_state(state)
     for i_iter in loop:
-        max_idx = trainer.select_action_by_eps(state)
+        max_idx = trainer.select_action_by_instruction(state)
         action = trainer.transform_action(max_idx)
         action = trainer.limit_action(action)
         next_state, reward, done,info = trainer.env.step(action)
+        loop.set_description(f"iter [{i_iter}]/[{max_iter}]")
+        loop.set_postfix(grasp_info=info['grasp'],reward=reward,action=trainer.last_action)
         if info["grasp"] == "Success":
             grasp_success+=1
+        if done:
+            trainer.env.reset_without_random()
         trainer.writer.add_scalar("Grasping performance(Success rate)",grasp_success/trainer.steps_done,trainer.steps_done)
         reward = torch.tensor([[reward]],dtype=torch.float32)
         next_state = trainer.transform_state(next_state)
         trainer.memory.push(state,max_idx, next_state,reward)
         state = next_state
         trainer.learn()
-        loop.set_description(f"iter [{i_iter}]/[{max_iter}]")
-        loop.set_postfix(grasp_info=info['grasp'],reward=reward.item())
 
-    trainer.save(path_name="grasprl/trained/resnet/pex",filename="resnet")
+
+    trainer.save(path_name="grasprl/trained/resnet/resnet",filename="random")
     trainer.env.close()
     trainer.writer.close()
 if __name__ == "__main__":

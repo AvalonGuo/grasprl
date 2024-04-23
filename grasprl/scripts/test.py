@@ -2,26 +2,31 @@ from grasprl.trainer.dqn_baseline import DQN_Trainer
 from grasprl.envs.grasp import GraspRobot
 from grasprl.utils.transform_utils import quat2mat
 import numpy as np
+from tqdm import tqdm
 
 
 workspace_limits = np.asarray([[-0.224, 0.224], [-0.224, 0.224], [0.95,1.6]]) # Cols: min max, Rows: x y z (define workspace limits in robot coordinates)
 
 
 def test_DQN(model_path):
-    model = DQN_Trainer(render_mode="human")
+    max_iter = 100
+    grasp_success = 0
+    loop = tqdm(range(1,max_iter+1))
+    model = DQN_Trainer(render_mode="human",seed=20)
     model.load(filename=model_path)
-    state = model.env.reset()
+    state = model.env.reset_without_random()
     state = model.transform_state(state)
-    for i in range(10):
+    for i_iter in loop:
         
         action = model.predict(state,show=True)
         next_state,reward,terminated,info  = model.env.step(action)
         state = model.transform_state(next_state)
-        print(info)
+        if info['grasp'] == "Success":
+            grasp_success+=1
         if terminated:
-            state = model.env.reset()
+            state = model.env.reset_without_random()
             state = model.transform_state(state)
-
+    print(grasp_success)
 
 def test_cooconvert():
     import cv2
@@ -45,9 +50,8 @@ def test_cooconvert():
     cv2.waitKey(0)
 if __name__ == "__main__":
 
-    # test_DQN(model_path="grasprl/trained/resnet/2p5k")
     # test_reset_object()
-    test_cooconvert()
-    # test_DQN(model_path="grasprl/trained/resnet/pexresnet")
+    # test_cooconvert()
+    test_DQN(model_path="grasprl/trained/resnet/2p5k")
     # test_reset_object()
 
