@@ -205,7 +205,7 @@ def main():
     state = trainer.env.reset_without_random()
     state = trainer.transform_state(state)
     for i_iter in loop:
-        max_idx = trainer.select_action_by_instruction(state)
+        max_idx = trainer.select_action_by_eps_random(state)
         action = trainer.transform_action(max_idx)
         action = trainer.limit_action(action)
         next_state, reward, done,info = trainer.env.step(action)
