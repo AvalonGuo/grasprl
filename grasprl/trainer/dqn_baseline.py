@@ -30,10 +30,10 @@ class DQN_Trainer(object):
         learning_rate = 0.001,
         mem_size=2000,
         eps_start=1.0,
-        eps_end = 0.2,
-        eps_decay = 800,
+        eps_end = 0.,
+        eps_decay = 200,
         seed =20,
-        log_dir = "dqn_baseline",
+        log_dir = "test",
         render_mode="rgb"):
 
         self.writer = SummaryWriter(f"grasprl/log/DQN/{log_dir}")
@@ -195,17 +195,28 @@ class DQN_Trainer(object):
         self.q_net.load_state_dict(torch.load(f=filename + "_qnet",map_location=self.device))
 
 
+    def count(self,greedy,random_num):
+        self.eps_threshold = self.eps_end + (self.eps_start - self.eps_end) * math.exp(
+            -1.0 * self.steps_done / self.eps_decay
+        )
+        self.steps_done+=1
+        if random.random() > self.eps_threshold:
+            greedy+=1
+        else:
+            self.last_action = "random"
+            random_num+=1
+        return greedy,random_num
 def main():
     max_iter = 2500
     grasp_success = 0
     loop = tqdm(range(1,max_iter+1))
 
-    trainer = DQN_Trainer(log_dir="resnet_dqn_random",render_mode="rgb")
+    trainer = DQN_Trainer(log_dir="resnet_dqn_insne",render_mode="rgb")
 
     state = trainer.env.reset_without_random()
     state = trainer.transform_state(state)
     for i_iter in loop:
-        max_idx = trainer.select_action_by_eps_random(state)
+        max_idx = trainer.select_action_by_instruction(state)
         action = trainer.transform_action(max_idx)
         action = trainer.limit_action(action)
         next_state, reward, done,info = trainer.env.step(action)
@@ -215,7 +226,7 @@ def main():
             grasp_success+=1
         if done:
             trainer.env.reset_without_random()
-        trainer.writer.add_scalar("Grasping performance(Success rate)",grasp_success/trainer.steps_done,trainer.steps_done)
+        trainer.writer.add_scalar("Grasping performance(Success rate)",grasp_success/max_iter,trainer.steps_done)
         reward = torch.tensor([[reward]],dtype=torch.float32)
         next_state = trainer.transform_state(next_state)
         trainer.memory.push(state,max_idx, next_state,reward)
@@ -223,7 +234,7 @@ def main():
         trainer.learn()
 
 
-    trainer.save(path_name="grasprl/trained/resnet/resnet",filename="random")
+    trainer.save(path_name="grasprl/trained/resnet/resnet",filename="insne")
     trainer.env.close()
     trainer.writer.close()
 if __name__ == "__main__":

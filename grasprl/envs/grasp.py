@@ -122,10 +122,7 @@ class GraspRobot(MujocoPhyEnv):
                 )
                 self.grp_ctrl.run(signal=1)
                 self.step_mujoco_simulation()
-            grasp_success = self.check_grasp_success()
-            if grasp_success:
-                self.info["grasp"] = "Success"
-                return down_success and grasp_success
+                return down_success 
 
 
     def move_up_drop(self):
@@ -141,25 +138,30 @@ class GraspRobot(MujocoPhyEnv):
                 up_pose
             )
             self.step_mujoco_simulation()
-        for i in range(self.frame_skip):
-            self.controller.run(
-                target_pose
-            )
-            self.step_mujoco_simulation()
-            ee_pos = self.get_ee_pos()
-            detals = np.abs(ee_pos - self.drop_area)
-            if max(detals) < self.tolerance:
-                success = True
-        if success:
+        grasp_success = self.check_grasp_success()
+        if grasp_success:
+            self.info["grasp"] = "Success"
+            self.grasped_num +=1
+            self.reward = 1
             for i in range(self.frame_skip):
                 self.controller.run(
                     target_pose
                 )
-                self.grp_ctrl.run(signal=0)
                 self.step_mujoco_simulation()
-                #self.get_image_data(depth=True,show=True)
-            if self.data.ctrl[0] == 0:
-                    return success
+                ee_pos = self.get_ee_pos()
+                detals = np.abs(ee_pos - self.drop_area)
+                if max(detals) < self.tolerance:
+                    success = True
+            if success:
+                for i in range(self.frame_skip):
+                    self.controller.run(
+                        target_pose
+                    )
+                    self.grp_ctrl.run(signal=0)
+                    self.step_mujoco_simulation()
+                    #self.get_image_data(depth=True,show=True)
+                if self.data.ctrl[0] == 0:
+                        return success
 
     def check_terminated(self):
         terminated = False
@@ -200,12 +202,10 @@ class GraspRobot(MujocoPhyEnv):
         move_to_above = self.move_eef(action)
 
         if move_to_above:
-            grasp_success = self.down_and_grasp(action)
+            down_success = self.down_and_grasp(action)
 
-            if grasp_success:
+            if down_success:
                 self.move_up_drop()
-                self.reward = 1
-                self.grasped_num +=1
             else:
                 self.open_gripper()
                 
@@ -236,6 +236,23 @@ class GraspRobot(MujocoPhyEnv):
         self.grasp_step+=1
         return self.observation,self.reward,self.terminated,self.info
 
+    def step_test(self, action,failed_num):
+        self.terminated = False
+ 
+        self.before_grasp(show=False)
+        self.move_and_grasp(action)
+        self.after_grasp(show=False)
+        if self.grasped_num == _grasp_target_num: 
+            self.terminated = True
+            self.info["completion"] = "Success"
+        if self.grasp_step==1:
+            self.terminated = True
+        if self.check_terminated():
+            self.terminated = True
+        self.grasp_step+=1
+        return self.observation,self.reward,self.terminated,self.info
+
+
     def reset_object(self):
         for box_name in _target_box:
             self.set_body_pos(box_name)
@@ -245,6 +262,7 @@ class GraspRobot(MujocoPhyEnv):
         self.reset_object()
         self.grasped_num = 0
         self.grasp_step = 0
+        self.info["completion"] = "Failed"
         self.before_grasp(show=False)
         return self.observation
 
@@ -252,5 +270,6 @@ class GraspRobot(MujocoPhyEnv):
         super().reset()
         self.grasped_num = 0
         self.grasp_step = 0
+        self.info["completion"] = "Failed"
         self.before_grasp(show=False)
         return self.observation
